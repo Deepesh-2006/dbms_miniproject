@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smart_fleet}
+      POSTGRES_USER: ${POSTGRES_USER:-fleet_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_locally}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql:ro
+      - ./database/triggers.sql:/docker-entrypoint-initdb.d/03_triggers.sql:ro
+      - ./database/procedures.sql:/docker-entrypoint-initdb.d/04_procedures.sql:ro
+      - ./database/views.sql:/docker-entrypoint-initdb.d/05_views.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/06_seed.sql:ro
+      - ./database/roles.sql:/docker-entrypoint-initdb.d/07_roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleet_admin} -d ${POSTGRES_DB:-smart_fleet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fleet_admin:change_me_locally@db:5432/smart_fleet}
+      JWT_SECRET: ${JWT_SECRET:-development-secret-change-me}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

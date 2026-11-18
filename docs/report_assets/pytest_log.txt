@@ -1,0 +1,7 @@
+tests/test_api.py::test_authentication_and_dashboard PASSED
+tests/test_api.py::test_vehicle_creation_and_unique_registration PASSED
+tests/test_api.py::test_trip_rejects_bad_odometer_and_expired_insurance PASSED
+tests/test_api.py::test_fuel_and_maintenance_constraints PASSED
+tests/test_telemetry.py::test_telemetry_crud_and_roles PASSED
+tests/test_telemetry.py::test_telemetry_validation PASSED
+============================== 6 passed in 0.57s ===============================

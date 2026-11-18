@@ -1,0 +1,24 @@
+frontend/
+├── app
+│   ├── [section]
+│   │   └── page.tsx
+│   ├── dashboard
+│   │   └── page.tsx
+│   ├── insights
+│   │   └── page.tsx
+│   ├── login
+│   │   └── page.tsx
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── components
+│   ├── Shell.tsx
+│   └── screens.tsx
+├── lib
+│   └── api.ts
+├── Dockerfile
+├── next.config.mjs
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.mjs
+└── tsconfig.json

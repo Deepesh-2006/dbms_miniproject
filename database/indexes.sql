@@ -1,0 +1,11 @@
+CREATE INDEX idx_vehicles_branch_status ON vehicles(branch_id, status);
+CREATE INDEX idx_vehicles_next_service ON vehicles(next_service_date, next_service_odometer);
+CREATE INDEX idx_drivers_branch_status ON drivers(branch_id, status);
+CREATE INDEX idx_trips_vehicle_start ON trips(vehicle_id, start_time DESC);
+CREATE INDEX idx_trips_driver_start ON trips(driver_id, start_time DESC);
+CREATE INDEX idx_trips_route_start ON trips(route_id, start_time DESC);
+CREATE INDEX idx_fuel_vehicle_date ON fuel_transactions(vehicle_id, transaction_date DESC);
+CREATE INDEX idx_maintenance_vehicle_date ON maintenance(vehicle_id, service_date DESC);
+CREATE INDEX idx_insurance_expiry ON insurance(expiry_date);
+CREATE INDEX idx_expenses_vehicle_date ON expenses(vehicle_id, expense_date DESC);
+CREATE INDEX idx_accidents_vehicle_date ON accidents(vehicle_id, accident_date DESC);

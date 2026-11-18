@@ -1,0 +1,38 @@
+127.0.0.1:6379> HSET telemetry:vehicle:101 latitude 12.9716 longitude 77.5946 speed_kmph 62 fuel_level_pct 71 engine_temp_c 88
+5
+127.0.0.1:6379> EXPIRE telemetry:vehicle:101 900
+1
+127.0.0.1:6379> GEOADD fleet:positions 77.5946 12.9716 101
+1
+127.0.0.1:6379> HSET telemetry:vehicle:102 latitude 13.0827 longitude 80.2707 speed_kmph 45 fuel_level_pct 40
+4
+127.0.0.1:6379> EXPIRE telemetry:vehicle:102 900
+1
+127.0.0.1:6379> GEOADD fleet:positions 80.2707 13.0827 102
+1
+127.0.0.1:6379> HGETALL telemetry:vehicle:101
+latitude
+12.9716
+longitude
+77.5946
+speed_kmph
+62
+fuel_level_pct
+71
+engine_temp_c
+88
+127.0.0.1:6379> TTL telemetry:vehicle:101
+900
+127.0.0.1:6379> HSET telemetry:vehicle:101 speed_kmph 80 fuel_level_pct 69
+0
+127.0.0.1:6379> HGET telemetry:vehicle:101 speed_kmph
+80
+127.0.0.1:6379> GEOSEARCH fleet:positions FROMLONLAT 77.60 12.90 BYRADIUS 50 km ASC WITHDIST
+101
+7.9852
+127.0.0.1:6379> DEL telemetry:vehicle:101 telemetry:vehicle:102
+2
+127.0.0.1:6379> ZREM fleet:positions 101 102
+2
+127.0.0.1:6379> EXISTS telemetry:vehicle:101
+0

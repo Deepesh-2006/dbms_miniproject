@@ -1,0 +1,114 @@
+-- DML demonstration. Everything runs inside one transaction that is rolled back, so the seeded data is untouched.
+BEGIN;
+BEGIN
+-- INSERT: register a new vehicle
+INSERT INTO vehicles (registration_number, vehicle_type_id, branch_id, chassis_number, purchase_date, current_odometer, status)
+VALUES ('KA01ZZ9999', 1, 1, 'CHS99999999999999', DATE '2026-01-15', 1000, 'active') RETURNING vehicle_id, registration_number, status;
+ vehicle_id | registration_number | status 
+------------+---------------------+--------
+         54 | KA01ZZ9999          | active
+(1 row)
+
+INSERT 0 1
+-- INSERT: policy for the new vehicle, then fuel purchase (total_cost is a generated column; trigger advances odometer)
+INSERT INTO insurance (vehicle_id, provider, policy_number, start_date, expiry_date, premium, coverage_amount)
+SELECT vehicle_id, 'New India Assurance', 'POL-DEMO-0001', CURRENT_DATE - 30, CURRENT_DATE + 335, 42000, 1500000 FROM vehicles WHERE registration_number = 'KA01ZZ9999' RETURNING policy_number, expiry_date;
+ policy_number | expiry_date 
+---------------+-------------
+ POL-DEMO-0001 | 2027-10-05
+(1 row)
+
+INSERT 0 1
+INSERT INTO fuel_transactions (vehicle_id, driver_id, transaction_date, fuel_type, litres, price_per_litre, odometer, fuel_station)
+SELECT vehicle_id, 1, CURRENT_DATE, 'Diesel', 40, 92.50, 1150, 'Indian Oil, Hosur Road' FROM vehicles WHERE registration_number = 'KA01ZZ9999' RETURNING litres, price_per_litre, total_cost, odometer;
+ litres | price_per_litre | total_cost | odometer 
+--------+-----------------+------------+----------
+  40.00 |           92.50 |    3700.00 |  1150.00
+(1 row)
+
+INSERT 0 1
+SELECT registration_number, current_odometer FROM vehicles WHERE registration_number = 'KA01ZZ9999';
+ registration_number | current_odometer 
+---------------------+------------------
+ KA01ZZ9999          |          1150.00
+(1 row)
+
+-- UPDATE: send the vehicle for maintenance
+UPDATE vehicles SET status = 'maintenance' WHERE registration_number = 'KA01ZZ9999' RETURNING registration_number, status;
+ registration_number |   status    
+---------------------+-------------
+ KA01ZZ9999          | maintenance
+(1 row)
+
+UPDATE 1
+UPDATE vehicles SET status = 'active' WHERE registration_number = 'KA01ZZ9999';
+UPDATE 1
+-- INSERT trip, then stored procedure close_trip
+INSERT INTO trips (vehicle_id, driver_id, route_id, start_time, start_odometer, status)
+SELECT vehicle_id, 1, 1, now() - INTERVAL '3 hours', 1150, 'in_progress' FROM vehicles WHERE registration_number = 'KA01ZZ9999' RETURNING trip_id, status, start_odometer \gset new_
+INSERT 0 1
+CALL close_trip(:new_trip_id, 1290);
+CALL
+SELECT trip_id, status, start_odometer, end_odometer, end_odometer - start_odometer AS distance_km FROM trips WHERE trip_id = :new_trip_id;
+ trip_id |  status   | start_odometer | end_odometer | distance_km 
+---------+-----------+----------------+--------------+-------------
+     252 | completed |        1150.00 |      1290.00 |      140.00
+(1 row)
+
+SELECT registration_number, current_odometer FROM vehicles WHERE registration_number = 'KA01ZZ9999';
+ registration_number | current_odometer 
+---------------------+------------------
+ KA01ZZ9999          |          1290.00
+(1 row)
+
+-- Constraint / trigger rejections (each in a savepoint so the transaction continues)
+SAVEPOINT s1;
+SAVEPOINT
+INSERT INTO vehicles (registration_number, vehicle_type_id, branch_id, chassis_number, purchase_date) VALUES ('BAD-REG', 1, 1, 'CHS00000000000001', DATE '2026-01-01');
+psql:docs/dml_demo.sql:28: ERROR:  new row for relation "vehicles" violates check constraint "vehicles_registration_number_check"
+DETAIL:  Failing row contains (55, BAD-REG, 1, 1, CHS00000000000001, 2026-01-01, 0.00, null, null, active).
+ROLLBACK TO s1;
+ROLLBACK
+SAVEPOINT s2;
+SAVEPOINT
+INSERT INTO fuel_transactions (vehicle_id, transaction_date, fuel_type, litres, price_per_litre, odometer, fuel_station)
+SELECT vehicle_id, CURRENT_DATE, 'Diesel', 10, 90, 500, 'Odometer regression' FROM vehicles WHERE registration_number = 'KA01ZZ9999';
+psql:docs/dml_demo.sql:32: ERROR:  Odometer 500.00 cannot be lower than latest recorded reading 1290.00 for vehicle 54
+CONTEXT:  PL/pgSQL function validate_and_update_odometer() line 13 at RAISE
+ROLLBACK TO s2;
+ROLLBACK
+SAVEPOINT s3;
+SAVEPOINT
+CALL close_trip(1, 99999);
+psql:docs/dml_demo.sql:35: ERROR:  Trip 1 is already completed
+CONTEXT:  PL/pgSQL function close_trip(bigint,numeric,timestamp with time zone) line 6 at RAISE
+ROLLBACK TO s3;
+ROLLBACK
+SAVEPOINT s4;
+SAVEPOINT
+INSERT INTO trips (vehicle_id, driver_id, route_id, start_time, start_odometer, status)
+SELECT vehicle_id, 1, 1, now() + INTERVAL '2 years', 1290, 'planned' FROM vehicles WHERE registration_number = 'KA01ZZ9999';
+psql:docs/dml_demo.sql:39: ERROR:  Vehicle 54 has no valid insurance for trip date 2028-11-04
+CONTEXT:  PL/pgSQL function validate_insurance_for_trip() line 8 at RAISE
+ROLLBACK TO s4;
+ROLLBACK
+-- DELETE: remove the demo records (children first)
+DELETE FROM trips WHERE vehicle_id = (SELECT vehicle_id FROM vehicles WHERE registration_number = 'KA01ZZ9999');
+DELETE 1
+DELETE FROM fuel_transactions WHERE vehicle_id = (SELECT vehicle_id FROM vehicles WHERE registration_number = 'KA01ZZ9999');
+DELETE 1
+DELETE FROM vehicles WHERE registration_number = 'KA01ZZ9999' RETURNING registration_number;  -- insurance row is removed by ON DELETE CASCADE
+ registration_number 
+---------------------
+ KA01ZZ9999
+(1 row)
+
+DELETE 1
+SELECT count(*) AS remaining_demo_policies FROM insurance WHERE policy_number = 'POL-DEMO-0001';
+ remaining_demo_policies 
+-------------------------
+                       0
+(1 row)
+
+ROLLBACK;
+ROLLBACK
